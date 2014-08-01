@@ -1,110 +1,35 @@
 package main
 
 import (
-  "fmt"
   "github.com/gorilla/websocket"
   "github.com/go-martini/martini"
   "github.com/martini-contrib/cors"
-  "crypto/tls"
+  "github.com/pgct1/ambian-monitor/notification"
+  "github.com/pgct1/ambian-monitor/connection"
   "net/http"
-	"net/url"
-  "time"
 )
 
 const source = "wss://ambianmonitordev-projectgemini.rhcloud.com:8443/json"
 
-
-type Sources struct {
-	Corporate bool
-	SocialMedia bool
-	Aggregate bool
-}
-
-type NotificationMetaData struct {
-	AmbianStreamIds []int
-	Sources Sources
-}
-
-const (
-	cNotificationTypeDefault = iota
-	cNotificationTypeTweet = iota
-	cNotificationTypeOfficialNews = iota
-)
-
-// packets
-
-type NotificationPacket struct {
-	Type int
-	Content string
-	MetaData NotificationMetaData
-}
-
 type AuthorizationPacket struct {
 	Password string
-	DesiredStreams NotificationMetaData
+	DesiredStreams notification.MetaData
 }
 
+var sourceStream chan notification.Packet
+
 func websocketConnectionHandler(ws *websocket.Conn) {
+
+  //TODO mirror incoming connections to the source
 
 }
 
 func main(){
 
-  //sourceStream := make(chan NotificationPacket)
+  sourceStream = make(chan notification.Packet)
 
-
-	streamUrl, _ := url.Parse(source)
-
-  connection, err := tls.Dial("tcp", streamUrl.Host, &tls.Config{})
-
-  if err != nil {
-    fmt.Println(err)
-    return
-	}
-
-	ws, response, err := websocket.NewClient(connection, streamUrl, http.Header{"Origin": {"ambianmonitordev-projectgemini.rhcloud.com"}}, 1024, 1024)
-  
-  if err != nil {
-    fmt.Println(err)
-    return
-  }
-
-  if response.StatusCode > 500 {
-    fmt.Println("500 error received when trying to connect.")
-    return
-  }
-
-	defer ws.Close()
-
-  // send authorization packet
-
-  streamIds := make([]int,0,1)
-
-  streamIds = append(streamIds,1)
-
-  sources := Sources{true,true,true}
-
-  metaData := NotificationMetaData{
-    AmbianStreamIds:streamIds,
-    Sources:sources,
-  }
-
-  authorizationPacket := AuthorizationPacket{
-    Password:SubscriptionPassword,
-    DesiredStreams:metaData,
-  }
-
-	ws.SetWriteDeadline(time.Now().Add(2 * time.Second))
-
-	err = ws.WriteJSON(authorizationPacket)
-
-	if err != nil {
-    fmt.Println("ERROR")
-    fmt.Println(err)
-    return
-	}
-
-  fmt.Println("nice")
+  go InitSourceStreamConnection(sourceStream)
+  go connection.InitializeConnectionManager(subscriptionPassword,sourceStream)
 
   martiniServerSetup := martini.Classic()
 
